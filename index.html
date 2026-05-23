@@ -482,96 +482,60 @@ const SB_URL = 'https://hdoifmagxuvjwmwjxwbu.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhkb2lmbWFneHV2andtd2p4d2J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NDAyODEsImV4cCI6MjA5NTAxNjI4MX0.nYcIwU82_fr-09GRkdKo55Js5PJHciRc_3OQsuyUNWg';
 
 const SB = {
-  _token: null,
-  _uid: null,
-  _email: null,
+  _token:null, _uid:null, _name:null,
 
   headers(extra={}) {
-    const h = {'Content-Type':'application/json','apikey':SB_KEY,...extra};
-    if(this._token) h['Authorization'] = 'Bearer ' + this._token;
-    return h;
+    return {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(this._token||''),...extra};
   },
 
-  async signUp(email, password, name) {
-    const r = await fetch(`${SB_URL}/auth/v1/signup`, {
-      method:'POST', headers: this.headers(),
-      body: JSON.stringify({email, password, data:{family_name: name}})
-    });
+  async signUp(email,password,name) {
+    const r=await fetch(`${SB_URL}/auth/v1/signup`,{method:'POST',headers:this.headers(),body:JSON.stringify({email,password,data:{family_name:name}})});
     return r.json();
   },
 
-  async signIn(email, password) {
-    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=password`, {
-      method:'POST', headers: this.headers(),
-      body: JSON.stringify({email, password})
-    });
-    const d = await r.json();
-    if(d.access_token) {
-      this._token = d.access_token;
-      this._uid   = d.user.id;
-      this._email = d.user.email;
-      this._name  = d.user.user_metadata?.family_name || email.split('@')[0];
-      // persist session
-      localStorage.setItem('gh_session', JSON.stringify({
-        token: d.access_token,
-        refresh: d.refresh_token,
-        uid: d.user.id,
-        email: d.user.email,
-        name: this._name
-      }));
+  async signIn(email,password) {
+    const r=await fetch(`${SB_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:this.headers(),body:JSON.stringify({email,password})});
+    const d=await r.json();
+    if(d.access_token){
+      this._token=d.access_token;this._uid=d.user.id;
+      this._name=d.user.user_metadata?.family_name||email.split('@')[0];
+      localStorage.setItem('gh_session',JSON.stringify({token:d.access_token,refresh:d.refresh_token,uid:d.user.id,name:this._name}));
     }
     return d;
   },
 
   async refreshSession(refreshToken) {
-    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
-      method:'POST', headers: this.headers(),
-      body: JSON.stringify({refresh_token: refreshToken})
-    });
-    const d = await r.json();
-    if(d.access_token) {
-      this._token = d.access_token;
-      this._uid   = d.user.id;
-      this._email = d.user.email;
-      this._name  = d.user.user_metadata?.family_name || d.user.email.split('@')[0];
-      const sess = JSON.parse(localStorage.getItem('gh_session')||'{}');
-      sess.token   = d.access_token;
-      sess.refresh = d.refresh_token;
-      localStorage.setItem('gh_session', JSON.stringify(sess));
+    const r=await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:this.headers(),body:JSON.stringify({refresh_token:refreshToken})});
+    const d=await r.json();
+    if(d.access_token){
+      this._token=d.access_token;this._uid=d.user.id;
+      this._name=d.user.user_metadata?.family_name||d.user.email.split('@')[0];
+      localStorage.setItem('gh_session',JSON.stringify({token:d.access_token,refresh:d.refresh_token,uid:d.user.id,name:this._name}));
     }
     return d;
   },
 
-  signOut() {
-    fetch(`${SB_URL}/auth/v1/logout`, {method:'POST', headers: this.headers()}).catch(()=>{});
-    this._token = this._uid = this._email = this._name = null;
+  signOut(){
+    fetch(`${SB_URL}/auth/v1/logout`,{method:'POST',headers:this.headers()}).catch(()=>{});
+    this._token=this._uid=this._name=null;
     localStorage.removeItem('gh_session');
   },
 
-  async loadData() {
-    const r = await fetch(
-      `${SB_URL}/rest/v1/family_data?user_id=eq.${this._uid}&select=data`,
-      {headers: {...this.headers(), 'Authorization': 'Bearer ' + this._token}}
-    );
-    if(!r.ok) console.log('loadData failed:', r.status, await r.text());
-    const rows = await r.json();
-    return rows?.[0]?.data || null;
+  async loadData(){
+    const r=await fetch(`${SB_URL}/rest/v1/family_data?user_id=eq.${this._uid}&select=data`,{headers:this.headers()});
+    const rows=await r.json();
+    return rows?.[0]?.data||null;
+  },
+
+  async saveData(payload){
+    const r=await fetch(`${SB_URL}/rest/v1/family_data`,{
+      method:'POST',
+      headers:this.headers({'Prefer':'resolution=merge-duplicates,return=minimal'}),
+      body:JSON.stringify({user_id:this._uid,data:payload,updated_at:new Date().toISOString()})
+    });
+    return r.ok;
   }
-
-  async saveData(payload) {
-  const r = await fetch(`${SB_URL}/rest/v1/family_data`, {
-    method:'POST',
-    headers: this.headers({
-      'Prefer':'resolution=merge-duplicates,return=minimal',
-      'Authorization': 'Bearer ' + this._token
-    }),
-    body: JSON.stringify({user_id: this._uid, data: payload, updated_at: new Date().toISOString()})
-  });
-  if(!r.ok) console.log('saveData failed:', r.status, await r.text());
-  return r.ok;
-}
 };
-
 // ════════════════════════════════════════════════════════
 // APP STATE
 // ════════════════════════════════════════════════════════
