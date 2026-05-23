@@ -551,20 +551,25 @@ const SB = {
   async loadData() {
     const r = await fetch(
       `${SB_URL}/rest/v1/family_data?user_id=eq.${this._uid}&select=data`,
-      {headers: this.headers({'Prefer':'return=representation'})}
+      {headers: {...this.headers(), 'Authorization': 'Bearer ' + this._token}}
     );
+    if(!r.ok) console.log('loadData failed:', r.status, await r.text());
     const rows = await r.json();
     return rows?.[0]?.data || null;
-  },
+  }
 
   async saveData(payload) {
-    const r = await fetch(`${SB_URL}/rest/v1/family_data`, {
-      method:'POST',
-      headers: this.headers({'Prefer':'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({user_id: this._uid, data: payload, updated_at: new Date().toISOString()})
-    });
-    return r.ok;
-  }
+  const r = await fetch(`${SB_URL}/rest/v1/family_data`, {
+    method:'POST',
+    headers: this.headers({
+      'Prefer':'resolution=merge-duplicates,return=minimal',
+      'Authorization': 'Bearer ' + this._token
+    }),
+    body: JSON.stringify({user_id: this._uid, data: payload, updated_at: new Date().toISOString()})
+  });
+  if(!r.ok) console.log('saveData failed:', r.status, await r.text());
+  return r.ok;
+}
 };
 
 // ════════════════════════════════════════════════════════
