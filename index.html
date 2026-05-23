@@ -713,6 +713,9 @@ async function tryRestoreSession() {
   try {
     const d = await SB.refreshSession(sess.refresh);
     if(d.access_token) {
+      SB._token = d.access_token;
+      SB._uid = d.user.id;
+      SB._name = d.user.user_metadata?.family_name || d.user.email.split('@')[0];
       await bootApp();
     } else {
       localStorage.removeItem('gh_session');
